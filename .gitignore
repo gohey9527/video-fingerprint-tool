@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.mp4
+*.mov
+*.mkv
+build/
+dist/
+build_resources/
+release/
+*.zip
+*.spec.bak
