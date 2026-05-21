@@ -11,3 +11,4 @@ build_resources/
 release/
 *.zip
 *.spec.bak
+*.db

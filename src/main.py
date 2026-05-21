@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -22,7 +23,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from auth import User
+from login_window import LoginWindow
 from processor import find_ffmpeg, format_file_size, is_video_file, process_videos
+from styles import apply_styles
 
 
 class WorkerThread(QThread):
@@ -128,8 +132,9 @@ class DropZone(QFrame):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, current_user: User) -> None:
         super().__init__()
+        self.current_user = current_user
         self.source_path: str | None = None
         self.worker: WorkerThread | None = None
         self.setWindowTitle("短视频指纹批量修改工具")
@@ -152,6 +157,15 @@ class MainWindow(QMainWindow):
         subtitle = QLabel("拖入一个视频，一键生成多个不同指纹的相同内容视频，输出到原视频目录。")
         subtitle.setWordWrap(True)
         subtitle.setObjectName("subtitle")
+
+        user_row = QHBoxLayout()
+        self.user_label = QLabel(f"当前用户：{self.current_user.username}")
+        self.user_label.setObjectName("userLabel")
+        logout_btn = QPushButton("退出登录")
+        logout_btn.clicked.connect(self._logout)
+        user_row.addWidget(self.user_label)
+        user_row.addStretch()
+        user_row.addWidget(logout_btn)
 
         self.drop_zone = DropZone()
         self.drop_zone.file_dropped.connect(self._on_file_selected)
@@ -199,6 +213,7 @@ class MainWindow(QMainWindow):
 
         root.addWidget(header)
         root.addWidget(subtitle)
+        root.addLayout(user_row)
         root.addWidget(self.drop_zone)
         root.addWidget(browse_btn)
         root.addLayout(count_row)
@@ -287,86 +302,34 @@ class MainWindow(QMainWindow):
         self.cancel_btn.setEnabled(False)
         self.count_spin.setEnabled(True)
 
-
-def apply_styles(app: QApplication) -> None:
-    app.setStyle("Fusion")
-    app.setStyleSheet(
-        """
-        QMainWindow, QWidget {
-            background: #111318;
-            color: #eef0f4;
-        }
-        #header {
-            color: #ffffff;
-        }
-        #subtitle, #hintLabel, #statusLabel {
-            color: #9aa3b2;
-        }
-        #fileLabel {
-            color: #c8d0dc;
-            font-size: 13px;
-        }
-        #dropZone {
-            border: 2px dashed #3a4252;
-            border-radius: 16px;
-            background: #171b22;
-        }
-        #dropZone[dragOver="true"] {
-            border-color: #5b8cff;
-            background: #1a2233;
-        }
-        QPushButton {
-            background: #252b36;
-            color: #eef0f4;
-            border: 1px solid #3a4252;
-            border-radius: 10px;
-            padding: 10px 16px;
-            font-size: 14px;
-        }
-        QPushButton:hover {
-            background: #2d3440;
-        }
-        QPushButton:disabled {
-            color: #667085;
-            background: #1b2028;
-        }
-        #primaryButton {
-            background: #4f7cff;
-            border-color: #4f7cff;
-            color: white;
-            font-weight: 600;
-        }
-        #primaryButton:hover {
-            background: #628cff;
-        }
-        QSpinBox {
-            background: #171b22;
-            border: 1px solid #3a4252;
-            border-radius: 8px;
-            padding: 6px 10px;
-            color: #eef0f4;
-        }
-        QProgressBar {
-            border: 1px solid #3a4252;
-            border-radius: 8px;
-            background: #171b22;
-            text-align: center;
-            color: #eef0f4;
-            height: 22px;
-        }
-        QProgressBar::chunk {
-            border-radius: 7px;
-            background: #4f7cff;
-        }
-        """
-    )
+    def _logout(self) -> None:
+        if self.worker and self.worker.isRunning():
+            QMessageBox.warning(self, "正在处理", "请等待当前任务完成或取消后再退出登录。")
+            return
+        self.close()
+        login = LoginWindow()
+        if login.exec() != QDialog.DialogCode.Accepted or login.authenticated_user is None:
+            QApplication.instance().quit()
+            return
+        self.current_user = login.authenticated_user
+        self.user_label.setText(f"当前用户：{self.current_user.username}")
+        self.source_path = None
+        self.generate_btn.setEnabled(False)
+        self.drop_zone.file_label.setText("尚未选择文件")
+        self.status_label.setText("请先拖入或选择一个视频文件")
+        self.show()
 
 
 def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("短视频指纹批量修改工具")
     apply_styles(app)
-    window = MainWindow()
+
+    login = LoginWindow()
+    if login.exec() != QDialog.DialogCode.Accepted or login.authenticated_user is None:
+        sys.exit(0)
+
+    window = MainWindow(login.authenticated_user)
     window.show()
     sys.exit(app.exec())
 

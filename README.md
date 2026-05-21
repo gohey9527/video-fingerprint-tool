@@ -4,6 +4,7 @@ Mac 端桌面工具：拖入一个视频，批量生成多个**指纹不同、�
 
 ## 功能
 
+- **账户登录**：需输入账户名和密码后才能使用
 - 拖拽或选择单个视频文件
 - 自定义生成数量（1–100）
 - 一键批量生成，保存到原视频目录
@@ -25,9 +26,42 @@ Mac 端桌面工具：拖入一个视频，批量生成多个**指纹不同、�
 ./run.sh
 ```
 
+## 账户登录
+
+首次启动会自动创建默认管理员：
+
+| 项目 | 值 |
+|------|-----|
+| 账户名 | `admin` |
+| 密码 | `admin123` |
+
+登录后请尽快修改默认密码。
+
+### 管理用户账户
+
+```bash
+cd /Users/shudong/video-fingerprint-tool
+source .venv/bin/activate
+
+# 添加用户
+python scripts/manage_users.py add 用户名 密码
+
+# 修改密码
+python scripts/manage_users.py passwd admin 新密码
+
+# 列出用户
+python scripts/manage_users.py list
+
+# 禁用用户
+python scripts/manage_users.py disable 用户名
+```
+
+用户数据保存在：`~/Library/Application Support/短视频指纹工具/users.db`
+
 ## 使用说明
 
-1. 打开应用后，将视频拖入虚线区域，或点击「选择视频文件」
+1. 打开应用，使用账户名和密码登录
+2. 将视频拖入虚线区域，或点击「选择视频文件」
 2. 设置「生成数量」
 3. 点击「生成视频」
 4. 完成后，在原视频目录下会生成类似 `原文件名_指纹_001.mp4` 的文件
