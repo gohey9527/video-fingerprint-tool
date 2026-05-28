@@ -53,23 +53,16 @@ jobs:
           retention-days: 30
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: windows-latest
-          name: Windows 最新版
-          body: |
-            自动构建的 Windows 版本（内置 FFmpeg + MineAdmin API 登录）。
-
-            使用方法：
-            1. 下载 `短视频指纹工具-windows.zip`
-            2. 解压后双击 `短视频指纹工具.exe`
-            3. 若 SmartScreen 拦截，点击“更多信息”→“仍要运行”
-          files: |
-            release/短视频指纹工具-windows.zip
-            release/使用说明-Windows.txt
-          draft: false
-          prerelease: false
-          make_latest: true
-          overwrite_files: true
+        shell: bash
+        run: |
+          if ! gh release view windows-latest >/dev/null 2>&1; then
+            gh release create windows-latest \
+              --title "Windows 最新版" \
+              --notes "自动构建的 Windows 版本（内置 FFmpeg + MineAdmin API 登录）。"
+          fi
+          gh release upload windows-latest \
+            "release/短视频指纹工具-windows.zip" \
+            "release/使用说明-Windows.txt" \
+            --clobber
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
