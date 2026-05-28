@@ -13,14 +13,25 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from auth import DEFAULT_ADMIN_PASSWORD, DEFAULT_ADMIN_USER, User, UserStore
+from auth import (
+    DEFAULT_ADMIN_PASSWORD,
+    DEFAULT_ADMIN_USER,
+    AuthApiError,
+    AuthSession,
+    MineAdminAuthClient,
+    User,
+    UserStore,
+)
 
 
 class LoginWindow(QDialog):
     def __init__(self) -> None:
         super().__init__()
         self.authenticated_user: User | None = None
+        self.authenticated_session: AuthSession | None = None
+        self.login_mode = "本地"
         self.store = UserStore()
+        self.api_client = MineAdminAuthClient.from_config()
         self.setWindowTitle("登录 - 短视频指纹工具")
         self.setFixedSize(420, 360)
         self._build_ui()
@@ -35,7 +46,10 @@ class LoginWindow(QDialog):
         title.setFont(QFont("", 22, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        hint = QLabel("请输入账户名和密码后使用工具")
+        hint_text = "请输入账户名和密码后使用工具"
+        if self.api_client:
+            hint_text = "当前已启用 MineAdmin API 登录"
+        hint = QLabel(hint_text)
         hint.setObjectName("loginHint")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -82,15 +96,30 @@ class LoginWindow(QDialog):
         username = self.username_input.text().strip()
         password = self.password_input.text()
 
-        user = self.store.authenticate(username, password)
-        if not user:
-            self.error_label.setText("账户名或密码错误，请重试")
-            self.password_input.clear()
-            self.password_input.setFocus()
+        if self.api_client:
+            try:
+                session = self.api_client.login(username, password)
+            except AuthApiError as exc:
+                self.error_label.setText(str(exc))
+                self.password_input.clear()
+                self.password_input.setFocus()
+                return
+            self.authenticated_session = session
+            self.authenticated_user = session.user
+            self.login_mode = "API"
+            self.accept()
             return
 
-        self.authenticated_user = user
-        self.accept()
+        user = self.store.authenticate(username, password)
+        if user:
+            self.authenticated_user = user
+            self.login_mode = "本地"
+            self.accept()
+            return
+
+        self.error_label.setText("账户名或密码错误，请重试")
+        self.password_input.clear()
+        self.password_input.setFocus()
 
     def closeEvent(self, event) -> None:  # noqa: ANN001
         if self.authenticated_user is None:

@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from auth import User
+from auth import AuthApiError, AuthSession, MineAdminAuthClient, User
 from login_window import LoginWindow
 from processor import find_ffmpeg, format_file_size, is_video_file, process_videos
 from styles import apply_styles
@@ -132,9 +132,17 @@ class DropZone(QFrame):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, current_user: User) -> None:
+    def __init__(
+        self,
+        current_user: User,
+        session: AuthSession | None = None,
+        login_mode: str = "本地",
+    ) -> None:
         super().__init__()
         self.current_user = current_user
+        self.current_session = session
+        self.login_mode = login_mode
+        self.api_client = MineAdminAuthClient.from_config()
         self.source_path: str | None = None
         self.worker: WorkerThread | None = None
         self.setWindowTitle("短视频指纹批量修改工具")
@@ -207,7 +215,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(True)
 
-        self.status_label = QLabel("请先拖入或选择一个视频文件")
+        self.status_label = QLabel(f"登录方式：{self.login_mode}。请先拖入或选择一个视频文件")
         self.status_label.setWordWrap(True)
         self.status_label.setObjectName("statusLabel")
 
@@ -306,17 +314,25 @@ class MainWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             QMessageBox.warning(self, "正在处理", "请等待当前任务完成或取消后再退出登录。")
             return
+        if self.login_mode == "API" and self.current_session and self.api_client:
+            try:
+                self.api_client.logout(self.current_session.access_token)
+            except AuthApiError as exc:
+                QMessageBox.warning(self, "退出提示", f"调用 API 退出失败，将继续本地退出：\n{exc}")
         self.close()
         login = LoginWindow()
         if login.exec() != QDialog.DialogCode.Accepted or login.authenticated_user is None:
             QApplication.instance().quit()
             return
         self.current_user = login.authenticated_user
+        self.current_session = login.authenticated_session
+        self.login_mode = login.login_mode
         self.user_label.setText(f"当前用户：{self.current_user.username}")
         self.source_path = None
         self.generate_btn.setEnabled(False)
         self.drop_zone.file_label.setText("尚未选择文件")
-        self.status_label.setText("请先拖入或选择一个视频文件")
+        self.status_label.setText(f"登录方式：{self.login_mode}。请先拖入或选择一个视频文件")
+        QMessageBox.information(self, "登录方式", f"本次登录方式：{self.login_mode}")
         self.show()
 
 
@@ -329,7 +345,12 @@ def main() -> None:
     if login.exec() != QDialog.DialogCode.Accepted or login.authenticated_user is None:
         sys.exit(0)
 
-    window = MainWindow(login.authenticated_user)
+    QMessageBox.information(None, "登录方式", f"本次登录方式：{login.login_mode}")
+    window = MainWindow(
+        login.authenticated_user,
+        session=login.authenticated_session,
+        login_mode=login.login_mode,
+    )
     window.show()
     sys.exit(app.exec())
 

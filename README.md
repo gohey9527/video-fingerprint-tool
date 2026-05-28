@@ -1,6 +1,6 @@
 # 短视频指纹批量修改工具
 
-Mac 端桌面工具：拖入一个视频，批量生成多个**指纹不同、内容相同**的视频文件，输出到原视频所在目录。
+桌面工具（支持 macOS / Windows）：拖入一个视频，批量生成多个**指纹不同、内容相同**的视频文件，输出到原视频所在目录。
 
 ## 功能
 
@@ -12,9 +12,9 @@ Mac 端桌面工具：拖入一个视频，批量生成多个**指纹不同、�
 
 ## 环境要求
 
-- macOS
+- macOS 或 Windows
 - Python 3.10+
-- FFmpeg（`brew install ffmpeg`）
+- FFmpeg（macOS: `brew install ffmpeg`，Windows: 安装后加入 PATH）
 
 ## 快速开始
 
@@ -138,6 +138,39 @@ xattr -cr "dist/短视频指纹工具.app"
 **Q: 想给别人用，需要签名吗？**
 
 本地或熟人使用：右键打开即可。若要公开发布，需 Apple 开发者账号做代码签名与公证（Notarization）。
+
+## 打包成 Windows 应用（.exe）
+
+请在 **Windows** 机器上运行（不能在 macOS 交叉打包）：
+
+```bat
+build_windows.bat
+```
+
+完成后输出：
+
+```
+release/短视频指纹工具.exe
+release/短视频指纹工具-windows.zip
+```
+
+### Windows 说明
+
+| 项目 | 说明 |
+|------|------|
+| 工具 | PyInstaller |
+| 内置 FFmpeg | 打包时自动复制 `ffmpeg.exe` / `ffprobe.exe` |
+| 首次运行拦截 | 若出现 SmartScreen，点“更多信息”→“仍要运行” |
+| 分发方式 | 推荐发送 `release/短视频指纹工具-windows.zip` |
+
+### 在 Mac 上自动打 Windows 包（GitHub Actions）
+
+Mac 无法本地交叉编译 Windows 可执行文件，但可以把代码推到 GitHub，由 CI 在 Windows 环境自动打包。
+
+1. 推送代码到 `main` 分支，或在 GitHub 仓库页面手动触发 **Actions → Build Windows Release → Run workflow**
+2. 等待任务完成后，进入该次运行详情
+3. 在 **Artifacts** 区域下载 `video-fingerprint-tool-windows`
+4. 解压后即可得到 `短视频指纹工具-windows.zip`
 
 ## 注意事项
 

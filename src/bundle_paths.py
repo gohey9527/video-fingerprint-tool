@@ -29,5 +29,10 @@ def bundled_binary(name: str) -> Path | None:
     root = bundle_root()
     if not root:
         return None
-    candidate = root / "bin" / name
-    return candidate if candidate.is_file() else None
+    candidates = [root / "bin" / name]
+    if sys.platform.startswith("win"):
+        candidates.append(root / "bin" / f"{name}.exe")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None

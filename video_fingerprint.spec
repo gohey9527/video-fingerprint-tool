@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller 打包配置：生成 macOS .app 应用包。"""
+"""PyInstaller 打包配置：支持 macOS/Windows。"""
 
 import shutil
 import sys
@@ -12,11 +12,14 @@ app_name = "短视频指纹工具"
 
 
 def locate_tool(name: str) -> str | None:
+    win_name = f"{name}.exe"
     candidates = [
         shutil.which(name),
+        shutil.which(win_name),
         f"/opt/homebrew/bin/{name}",
         f"/usr/local/bin/{name}",
         project_dir / "build_resources" / "bin" / name,
+        project_dir / "build_resources" / "bin" / win_name,
     ]
     for item in candidates:
         if item and Path(item).is_file():
@@ -86,18 +89,19 @@ coll = COLLECT(
     name=app_name,
 )
 
-app = BUNDLE(
-    coll,
-    name=f"{app_name}.app",
-    icon=None,
-    bundle_identifier="com.videofingerprint.tool",
-    info_plist={
-        "CFBundleName": app_name,
-        "CFBundleDisplayName": "短视频指纹批量修改",
-        "CFBundleShortVersionString": "1.0.0",
-        "CFBundleVersion": "1.0.0",
-        "LSMinimumSystemVersion": "12.0",
-        "NSHighResolutionCapable": True,
-        "NSRequiresAquaSystemAppearance": False,
-    },
-)
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name=f"{app_name}.app",
+        icon=None,
+        bundle_identifier="com.videofingerprint.tool",
+        info_plist={
+            "CFBundleName": app_name,
+            "CFBundleDisplayName": "短视频指纹批量修改",
+            "CFBundleShortVersionString": "1.0.0",
+            "CFBundleVersion": "1.0.0",
+            "LSMinimumSystemVersion": "12.0",
+            "NSHighResolutionCapable": True,
+            "NSRequiresAquaSystemAppearance": False,
+        },
+    )
