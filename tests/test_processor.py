@@ -18,6 +18,7 @@ from processor import (
     probe_video_dimensions,
     process_videos,
     resolve_min_resolution,
+    _ffmpeg_to_ffprobe,
 )
 
 
@@ -72,6 +73,10 @@ def test_resolve_min_resolution_for_9_16() -> None:
 
 def test_build_resolution_guard_filter() -> None:
     assert "720:1280" in build_resolution_guard_filter(720, 1280)
+
+
+def test_ffmpeg_to_ffprobe_on_windows_exe_path() -> None:
+    assert _ffmpeg_to_ffprobe(r"C:\app\bin\ffmpeg.exe") == r"C:\app\bin\ffprobe.exe"
 
 
 def test_process_videos_rejects_missing_file() -> None:

@@ -18,31 +18,25 @@ if /I not "%OS%"=="Windows_NT" (
 )
 
 echo ==> 检查 FFmpeg（会内置进应用，使用者无需安装）
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\prepare_ffmpeg_windows.ps1"
+if errorlevel 1 (
+  echo 错误：准备 FFmpeg 失败
+  exit /b 1
+)
+
 set "FFMPEG=%ROOT%build_resources\bin\ffmpeg.exe"
 set "FFPROBE=%ROOT%build_resources\bin\ffprobe.exe"
-
 if not exist "%FFMPEG%" (
-  for %%F in (ffmpeg.exe) do set "FFMPEG=%%~$PATH:F"
-)
-if not exist "%FFPROBE%" (
-  for %%F in (ffprobe.exe) do set "FFPROBE=%%~$PATH:F"
-)
-
-if not exist "%FFMPEG%" (
-  echo 错误：未找到 ffmpeg.exe，请先安装 FFmpeg 并加入 PATH，或手动放到 build_resources\bin\ffmpeg.exe
+  echo 错误：未找到 build_resources\bin\ffmpeg.exe
   exit /b 1
 )
 if not exist "%FFPROBE%" (
-  echo 错误：未找到 ffprobe.exe，请先安装 FFmpeg 并加入 PATH，或手动放到 build_resources\bin\ffprobe.exe
+  echo 错误：未找到 build_resources\bin\ffprobe.exe
   exit /b 1
 )
 
 echo     ffmpeg:  %FFMPEG%
 echo     ffprobe: %FFPROBE%
-
-if not exist "build_resources\bin" mkdir "build_resources\bin"
-copy /Y "%FFMPEG%" "build_resources\bin\ffmpeg.exe" >nul
-copy /Y "%FFPROBE%" "build_resources\bin\ffprobe.exe" >nul
 
 echo ==> 准备 Python 虚拟环境
 if not exist ".venv\Scripts\python.exe" (

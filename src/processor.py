@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -27,6 +28,39 @@ ASPECT_MIN_RESOLUTIONS: dict[str, tuple[int, int]] = {
     "3:4": (720, 960),
     "4:3": (960, 720),
 }
+
+
+def _ffmpeg_to_ffprobe(ffmpeg: str) -> str | None:
+    path = Path(ffmpeg)
+    if path.name.lower() == "ffmpeg.exe":
+        return str(path.with_name("ffprobe.exe"))
+    if path.name == "ffmpeg":
+        return str(path.with_name("ffprobe"))
+    replaced = str(path).replace("ffmpeg", "ffprobe")
+    return replaced if replaced != str(path) else None
+
+
+def _subprocess_text_kwargs() -> dict:
+    kwargs: dict = {"text": True, "errors": "replace"}
+    if sys.platform.startswith("win"):
+        kwargs["encoding"] = "utf-8"
+    return kwargs
+
+
+def verify_ffmpeg_runtime(ffmpeg: str) -> None:
+    command = [ffmpeg, "-version"]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            **_subprocess_text_kwargs(),
+        )
+    except OSError as exc:
+        raise RuntimeError(f"FFmpeg 无法启动：{exc}") from exc
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"FFmpeg 自检失败：{detail or '未知错误'}")
 
 
 def find_ffmpeg() -> str | None:
@@ -225,7 +259,12 @@ def probe_video_dimensions(source: Path) -> tuple[int, int] | None:
         str(source),
     ]
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            check=True,
+            **_subprocess_text_kwargs(),
+        )
         width_str, height_str = result.stdout.strip().split("x")
         width, height = int(width_str), int(height_str)
         if width > 0 and height > 0:
@@ -238,9 +277,9 @@ def probe_video_dimensions(source: Path) -> tuple[int, int] | None:
 def probe_duration_ms(ffmpeg: str, source: Path) -> float | None:
     ffprobe = find_ffprobe()
     if not ffprobe:
-        fallback = ffmpeg.replace("ffmpeg", "ffprobe")
-        if Path(fallback).is_file():
-            ffprobe = fallback
+        candidate = _ffmpeg_to_ffprobe(ffmpeg)
+        if candidate and Path(candidate).is_file():
+            ffprobe = candidate
         else:
             return None
 
@@ -255,7 +294,12 @@ def probe_duration_ms(ffmpeg: str, source: Path) -> float | None:
         str(source),
     ]
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            check=True,
+            **_subprocess_text_kwargs(),
+        )
         seconds = float(result.stdout.strip())
         return seconds * 1_000_000
     except (subprocess.CalledProcessError, ValueError):
@@ -274,7 +318,10 @@ def process_videos(
 ) -> list[str]:
     ffmpeg = find_ffmpeg()
     if not ffmpeg:
-        raise RuntimeError("未找到 FFmpeg，请先安装：brew install ffmpeg")
+        install_hint = "请安装 FFmpeg 并加入 PATH" if sys.platform.startswith("win") else "请先安装：brew install ffmpeg"
+        raise RuntimeError(f"未找到 FFmpeg，{install_hint}")
+
+    verify_ffmpeg_runtime(ffmpeg)
 
     source = Path(source_path).expanduser().resolve()
     if not source.is_file():
@@ -307,13 +354,15 @@ def process_videos(
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+            stderr=subprocess.STDOUT,
             bufsize=1,
+            **_subprocess_text_kwargs(),
         )
 
+        output_lines: list[str] = []
         assert process.stdout is not None
         for line in process.stdout:
+            output_lines.append(line)
             if should_cancel and should_cancel():
                 process.terminate()
                 break
@@ -324,8 +373,12 @@ def process_videos(
 
         process.wait()
         if process.returncode != 0:
-            stderr = process.stderr.read() if process.stderr else ""
-            raise RuntimeError(f"第 {index} 个视频生成失败：{stderr.strip() or '未知错误'}")
+            tail = "".join(output_lines[-30:]).strip()
+            raise RuntimeError(
+                f"第 {index} 个视频生成失败（exit={process.returncode}）：{tail or '未知错误'}"
+            )
+        if not output.is_file() or output.stat().st_size == 0:
+            raise RuntimeError(f"第 {index} 个视频生成失败：输出文件未生成或为空")
 
         outputs.append(str(output))
 

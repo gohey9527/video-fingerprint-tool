@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import sqlite3
+import sys
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -38,7 +39,10 @@ class AuthApiError(RuntimeError):
 
 
 def app_data_dir() -> Path:
-    base = Path.home() / "Library" / "Application Support" / APP_DIR_NAME
+    if sys.platform.startswith("win"):
+        base = Path(os.getenv("APPDATA", Path.home())) / APP_DIR_NAME
+    else:
+        base = Path.home() / "Library" / "Application Support" / APP_DIR_NAME
     base.mkdir(parents=True, exist_ok=True)
     return base
 

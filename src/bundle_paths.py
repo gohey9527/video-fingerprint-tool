@@ -16,8 +16,12 @@ def bundle_root() -> Path | None:
     if meipass:
         return Path(meipass)
 
-    # py2app: Contents/MacOS/executable -> Contents/Resources
     exe = Path(sys.executable)
+    internal = exe.parent / "_internal"
+    if internal.is_dir():
+        return internal
+
+    # py2app: Contents/MacOS/executable -> Contents/Resources
     resources = exe.parent.parent / "Resources"
     if resources.is_dir():
         return resources

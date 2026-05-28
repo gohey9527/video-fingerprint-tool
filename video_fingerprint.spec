@@ -28,12 +28,18 @@ def locate_tool(name: str) -> str | None:
 
 
 binaries = []
-for tool in ("ffmpeg", "ffprobe"):
-    path = locate_tool(tool)
-    if path:
-        binaries.append((path, "bin"))
-    else:
-        print(f"[警告] 未找到 {tool}，打包后的应用可能无法处理视频。", file=sys.stderr)
+bin_dir = project_dir / "build_resources" / "bin"
+if bin_dir.is_dir():
+    for item in sorted(bin_dir.iterdir()):
+        if item.is_file():
+            binaries.append((str(item.resolve()), "bin"))
+else:
+    for tool in ("ffmpeg", "ffprobe"):
+        path = locate_tool(tool)
+        if path:
+            binaries.append((path, "bin"))
+        else:
+            print(f"[警告] 未找到 {tool}，打包后的应用可能无法处理视频。", file=sys.stderr)
 
 a = Analysis(
     [str(src_dir / "main.py")],
