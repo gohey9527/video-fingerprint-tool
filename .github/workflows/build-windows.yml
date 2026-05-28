@@ -32,11 +32,15 @@ jobs:
       - name: Install FFmpeg
         run: choco install ffmpeg -y --no-progress
 
+      - name: Prepare FFmpeg binaries
+        shell: pwsh
+        run: ./scripts/prepare_ffmpeg_windows.ps1
+
       - name: Verify FFmpeg
         shell: cmd
         run: |
-          ffmpeg -version
-          ffprobe -version
+          build_resources\bin\ffmpeg.exe -version
+          build_resources\bin\ffprobe.exe -version
 
       - name: Build Windows package
         shell: cmd

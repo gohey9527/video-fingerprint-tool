@@ -60,6 +60,11 @@ def verify_ffmpeg_runtime(ffmpeg: str) -> None:
         raise RuntimeError(f"FFmpeg 无法启动：{exc}") from exc
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
+        if "Cannot find file" in detail and "lib\\ffmpeg\\tools" in detail:
+            raise RuntimeError(
+                "FFmpeg 自检失败：检测到 Chocolatey 快捷方式而非完整程序。"
+                "请重新下载最新 Windows 安装包。"
+            )
         raise RuntimeError(f"FFmpeg 自检失败：{detail or '未知错误'}")
 
 
