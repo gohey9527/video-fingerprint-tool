@@ -1,4 +1,5 @@
-# Copy real FFmpeg binaries (not Chocolatey shims) into build_resources/bin.
+# Copy real FFmpeg binaries into build_resources/bin.
+# Prefer downloading a static build so Chocolatey shims are never packaged.
 $ErrorActionPreference = "Stop"
 
 $target = Join-Path $PSScriptRoot "..\build_resources\bin"
@@ -25,6 +26,43 @@ function Add-CandidateDir {
     if ($Dir -and (Test-Path $Dir) -and -not $List.Contains($Dir)) {
         [void]$List.Add($Dir)
     }
+}
+
+function Install-StaticFfmpeg {
+    $cacheRoot = Join-Path $PSScriptRoot "..\build_resources\.ffmpeg-cache"
+    $zipPath = Join-Path $cacheRoot "ffmpeg-win64-gpl.zip"
+    $extractRoot = Join-Path $cacheRoot "extracted"
+    $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+
+    New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
+
+    if (-not (Test-Path $zipPath)) {
+        Write-Host "Downloading static FFmpeg from BtbN..."
+        Invoke-WebRequest -Uri $url -OutFile $zipPath
+    }
+
+    if (Test-Path $extractRoot) {
+        Remove-Item -Recurse -Force $extractRoot
+    }
+    Expand-Archive -Path $zipPath -DestinationPath $extractRoot -Force
+
+    $binDir = Get-ChildItem -Path $extractRoot -Recurse -Directory -Filter bin |
+        Where-Object { Test-Path (Join-Path $_.FullName "ffmpeg.exe") } |
+        Select-Object -First 1
+
+    if (-not $binDir) {
+        return $false
+    }
+
+    if (Copy-BinDirectory $binDir.FullName) {
+        Write-Host "Copied FFmpeg from static build: $($binDir.FullName)"
+        return $true
+    }
+    return $false
+}
+
+if (Install-StaticFfmpeg) {
+    exit 0
 }
 
 $candidateDirs = New-Object 'System.Collections.Generic.List[string]'
@@ -61,4 +99,4 @@ foreach ($dir in $candidateDirs) {
     }
 }
 
-Write-Error "Unable to locate a real ffmpeg.exe binary with all required DLLs (Chocolatey shims are not supported)."
+Write-Error "Unable to locate a real ffmpeg.exe binary with all required DLLs."

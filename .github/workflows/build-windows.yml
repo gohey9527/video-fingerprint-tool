@@ -29,9 +29,6 @@ jobs:
             requirements.txt
             requirements-build.txt
 
-      - name: Install FFmpeg
-        run: choco install ffmpeg -y --no-progress
-
       - name: Prepare FFmpeg binaries
         shell: pwsh
         run: ./scripts/prepare_ffmpeg_windows.ps1

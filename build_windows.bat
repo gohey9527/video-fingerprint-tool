@@ -74,6 +74,30 @@ if not exist "%DIST_DIR%" (
   exit /b 1
 )
 
+echo ==> 验证内置 FFmpeg
+set "PACKAGED_FFMPEG=%DIST_DIR%\_internal\bin\ffmpeg.exe"
+set "PACKAGED_FFPROBE=%DIST_DIR%\_internal\bin\ffprobe.exe"
+if not exist "%PACKAGED_FFMPEG%" (
+  echo 错误：打包结果中未找到 %PACKAGED_FFMPEG%
+  exit /b 1
+)
+if not exist "%PACKAGED_FFPROBE%" (
+  echo 错误：打包结果中未找到 %PACKAGED_FFPROBE%
+  exit /b 1
+)
+"%PACKAGED_FFMPEG%" -version >nul 2>&1
+if errorlevel 1 (
+  echo 错误：内置 ffmpeg.exe 无法运行（可能是 Chocolatey 快捷方式）
+  exit /b 1
+)
+"%PACKAGED_FFPROBE%" -version >nul 2>&1
+if errorlevel 1 (
+  echo 错误：内置 ffprobe.exe 无法运行
+  exit /b 1
+)
+echo     packaged ffmpeg:  %PACKAGED_FFMPEG%
+echo     packaged ffprobe: %PACKAGED_FFPROBE%
+
 echo ==> 生成分发包
 mkdir "%RELEASE_DIR%"
 copy /Y "dist\%APP_NAME%.exe" "%RELEASE_DIR%\%APP_NAME%.exe" >nul
