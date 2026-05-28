@@ -8,6 +8,9 @@ on:
       - ".gitignore"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -67,6 +70,6 @@ jobs:
           draft: false
           prerelease: false
           make_latest: false
-          allowUpdates: true
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
