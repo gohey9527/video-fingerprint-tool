@@ -44,6 +44,7 @@ def _subprocess_text_kwargs() -> dict:
     kwargs: dict = {"text": True, "errors": "replace"}
     if sys.platform.startswith("win"):
         kwargs["encoding"] = "utf-8"
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     return kwargs
 
 
