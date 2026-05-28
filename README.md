@@ -118,6 +118,12 @@ dist/短视频指纹工具.app
 2. 或把 `.app` 拖到「应用程序」文件夹，从启动台打开
 3. 若系统提示「无法验证开发者」：**右键 → 打开**（首次即可）
 
+### 从 GitHub Releases 下载 Mac 版
+
+1. 打开 [Releases 页面](https://github.com/gohey9527/video-fingerprint-tool/releases)
+2. 选择 **macOS 最新版**（`macos-latest`）
+3. 下载 `短视频指纹工具-macOS-arm64.zip`（适用于 M 系列 Mac）
+
 ### 打包说明
 
 | 项目 | 说明 |
@@ -170,7 +176,9 @@ Mac 无法本地交叉编译 Windows 可执行文件，但可以把代码推到 
 **下载方式（推荐）：**
 
 1. 打开仓库右侧 **Releases**（或访问 [Releases 页面](https://github.com/gohey9527/video-fingerprint-tool/releases)）
-2. 下载 `windows-latest` 版本中的 `短视频指纹工具-windows.zip`
+2. 下载对应平台版本：
+   - **macOS 最新版** → `短视频指纹工具-macOS-arm64.zip`
+   - **Windows 最新版** → `短视频指纹工具-windows.zip`
 
 **备用方式（Actions Artifacts）：**
 
