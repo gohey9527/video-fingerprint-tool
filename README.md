@@ -167,10 +167,16 @@ release/短视频指纹工具-windows.zip
 
 Mac 无法本地交叉编译 Windows 可执行文件，但可以把代码推到 GitHub，由 CI 在 Windows 环境自动打包。
 
-1. 推送代码到 `main` 分支，或在 GitHub 仓库页面手动触发 **Actions → Build Windows Release → Run workflow**
-2. 等待任务完成后，进入该次运行详情
-3. 在 **Artifacts** 区域下载 `video-fingerprint-tool-windows`
-4. 解压后即可得到 `短视频指纹工具-windows.zip`
+**下载方式（推荐）：**
+
+1. 打开仓库右侧 **Releases**（或访问 [Releases 页面](https://github.com/gohey9527/video-fingerprint-tool/releases)）
+2. 下载 `windows-latest` 版本中的 `短视频指纹工具-windows.zip`
+
+**备用方式（Actions Artifacts）：**
+
+1. 打开 **Actions → Build Windows Release**
+2. 进入最新一次成功运行
+3. 在 **Artifacts** 下载 `video-fingerprint-tool-windows`
 
 ## 注意事项
 
