@@ -16,6 +16,8 @@ from urllib import error, request
 
 
 APP_DIR_NAME = "短视频指纹工具"
+APP_CLIENT_ID = "video-fingerprint-tool"
+APP_VERSION = "1.0.0"
 DEFAULT_ADMIN_USER = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"
 DEFAULT_MINEADMIN_BASE_URL = "https://ad-api.paiwan.com"
@@ -32,6 +34,8 @@ class AuthSession:
     access_token: str
     refresh_token: str
     expire_at: int
+    nickname: str = ""
+    is_admin: bool = False
 
 
 class AuthApiError(RuntimeError):
@@ -53,6 +57,30 @@ def database_path() -> Path:
 
 def auth_api_config_path() -> Path:
     return app_data_dir() / "auth_api.json"
+
+
+def saved_login_path() -> Path:
+    return app_data_dir() / "saved_login.json"
+
+
+def load_admin_usernames() -> set[str]:
+    admins = {DEFAULT_ADMIN_USER}
+    config_path = auth_api_config_path()
+    if config_path.is_file():
+        with suppress(OSError, json.JSONDecodeError):
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+            extra = payload.get("admin_usernames", [])
+            if isinstance(extra, list):
+                admins.update(str(name).strip().lower() for name in extra if str(name).strip())
+    return admins
+
+
+def is_admin_user(username: str, *, nickname: str = "") -> bool:
+    normalized = username.strip().lower()
+    if normalized in load_admin_usernames():
+        return True
+    nickname_text = nickname.strip()
+    return nickname_text in {"管理员", "超级管理员"}
 
 
 def _normalize_mineadmin_base_url(raw_url: str) -> str:
@@ -92,6 +120,105 @@ def _verify_password(password: str, salt_hex: str, password_hash: str) -> bool:
     salt = bytes.fromhex(salt_hex)
     _, digest_hex = _hash_password(password, salt)
     return secrets.compare_digest(digest_hex, password_hash)
+
+
+def _machine_key() -> bytes:
+    import platform
+
+    seed = f"{APP_DIR_NAME}:{platform.node()}:{sys.platform}"
+    return hashlib.sha256(seed.encode("utf-8")).digest()
+
+
+def _encode_secret(plain: str) -> str:
+    import base64
+
+    key = _machine_key()
+    encrypted = bytes(byte ^ key[index % len(key)] for index, byte in enumerate(plain.encode("utf-8")))
+    return base64.urlsafe_b64encode(encrypted).decode("ascii")
+
+
+def _decode_secret(encoded: str) -> str:
+    import base64
+
+    key = _machine_key()
+    encrypted = base64.urlsafe_b64decode(encoded.encode("ascii"))
+    plain = bytes(byte ^ key[index % len(key)] for index, byte in enumerate(encrypted))
+    return plain.decode("utf-8")
+
+
+@dataclass
+class SavedLogin:
+    username: str
+    remember_username: bool = False
+    remember_session: bool = False
+    login_mode: str = "API"
+    refresh_token: str = ""
+
+
+class SavedLoginStore:
+    def load(self) -> SavedLogin | None:
+        path = saved_login_path()
+        if not path.is_file():
+            return None
+        with suppress(OSError, json.JSONDecodeError, ValueError):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            refresh_token = ""
+            encoded = str(payload.get("refresh_token", "")).strip()
+            if encoded:
+                refresh_token = _decode_secret(encoded)
+            return SavedLogin(
+                username=str(payload.get("username", "")).strip(),
+                remember_username=bool(payload.get("remember_username", False)),
+                remember_session=bool(payload.get("remember_session", False)),
+                login_mode=str(payload.get("login_mode", "API")),
+                refresh_token=refresh_token,
+            )
+        return None
+
+    def save(self, saved: SavedLogin) -> None:
+        path = saved_login_path()
+        payload: dict[str, object] = {
+            "username": saved.username.strip(),
+            "remember_username": saved.remember_username,
+            "remember_session": saved.remember_session,
+            "login_mode": saved.login_mode,
+        }
+        if saved.remember_session and saved.refresh_token:
+            payload["refresh_token"] = _encode_secret(saved.refresh_token)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def clear(self) -> None:
+        with suppress(OSError):
+            saved_login_path().unlink(missing_ok=True)
+
+
+def try_restore_session() -> tuple[User, AuthSession, str] | None:
+    saved = SavedLoginStore().load()
+    if not saved or not saved.remember_session or not saved.refresh_token:
+        return None
+    if saved.login_mode != "API":
+        return None
+
+    api_client = MineAdminAuthClient.from_config()
+    if not api_client:
+        return None
+
+    try:
+        session = api_client.refresh(saved.refresh_token)
+    except AuthApiError:
+        return None
+
+    saved_login_store = SavedLoginStore()
+    saved_login_store.save(
+        SavedLogin(
+            username=session.user.username,
+            remember_username=True,
+            remember_session=True,
+            login_mode="API",
+            refresh_token=session.refresh_token,
+        )
+    )
+    return session.user, session, "API"
 
 
 class MineAdminAuthClient:
@@ -214,15 +341,13 @@ class MineAdminAuthClient:
         info_code = int(info.get("code", 500))
         if info_code != 200:
             raise AuthApiError(self._extract_result_error(info, "获取用户信息失败"))
-        username_from_info = str((info.get("data") or {}).get("username", "")).strip()
-        if not username_from_info:
-            username_from_info = username.strip().lower()
 
-        return AuthSession(
-            user=User(username=username_from_info),
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expire_at=expire_at,
+        return self._session_from_info(
+            username,
+            access_token,
+            refresh_token,
+            expire_at,
+            info,
         )
 
     def refresh(self, refresh_token: str) -> AuthSession:
@@ -240,12 +365,12 @@ class MineAdminAuthClient:
         info_code = int(info.get("code", 500))
         if info_code != 200:
             raise AuthApiError(self._extract_result_error(info, "获取用户信息失败"))
-        username = str((info.get("data") or {}).get("username", "")).strip() or "unknown"
-        return AuthSession(
-            user=User(username=username),
-            access_token=access_token,
-            refresh_token=new_refresh_token,
-            expire_at=expire_at,
+        return self._session_from_info(
+            "",
+            access_token,
+            new_refresh_token,
+            expire_at,
+            info,
         )
 
     def logout(self, access_token: str) -> None:
@@ -253,6 +378,100 @@ class MineAdminAuthClient:
         code = int(result.get("code", 500))
         if code != 200:
             raise AuthApiError(self._extract_result_error(result, "退出登录失败"))
+
+    def _post_json_with_bearer(self, path: str, access_token: str, payload: dict) -> dict:
+        url = f"{self.base_url}{path}"
+        data = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            url,
+            data=data,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with request.urlopen(req, timeout=self.timeout) as resp:
+                body = resp.read().decode("utf-8")
+                return json.loads(body) if body else {}
+        except error.HTTPError as exc:
+            message = exc.read().decode("utf-8", errors="ignore")
+            raise AuthApiError(f"接口 HTTP 错误: {exc.code} {message}") from exc
+        except error.URLError as exc:
+            raise AuthApiError(f"接口连接失败: {exc.reason}") from exc
+        except json.JSONDecodeError as exc:
+            raise AuthApiError("接口返回了非 JSON 数据") from exc
+
+    def report_usage(
+        self,
+        access_token: str,
+        *,
+        username: str,
+        event_type: str,
+        event_detail: str = "",
+        client_id: str = APP_CLIENT_ID,
+        client_platform: str = "",
+        client_version: str = APP_VERSION,
+        created_at: str = "",
+    ) -> None:
+        payload = {
+            "username": username,
+            "client_id": client_id,
+            "client_platform": client_platform,
+            "client_version": client_version,
+            "event_type": event_type,
+            "event_detail": event_detail,
+            "created_at": created_at,
+        }
+        result = self._post_json_with_bearer(
+            "/admin/app/clientUsage/report",
+            access_token,
+            payload,
+        )
+        code = int(result.get("code", 500))
+        if code not in (200, 404):
+            raise AuthApiError(self._extract_result_error(result, "上报使用记录失败"))
+
+    def list_usage(self, access_token: str, *, page: int = 1, page_size: int = 200) -> dict:
+        query = f"page={page}&pageSize={page_size}"
+        url = f"{self.base_url}/admin/app/clientUsage/list?{query}"
+        req = request.Request(
+            url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            method="GET",
+        )
+        try:
+            with request.urlopen(req, timeout=self.timeout) as resp:
+                body = resp.read().decode("utf-8")
+                return json.loads(body) if body else {}
+        except error.HTTPError as exc:
+            message = exc.read().decode("utf-8", errors="ignore")
+            raise AuthApiError(f"使用记录接口 HTTP 错误: {exc.code} {message}") from exc
+        except error.URLError as exc:
+            raise AuthApiError(f"使用记录接口连接失败: {exc.reason}") from exc
+        except json.JSONDecodeError as exc:
+            raise AuthApiError("使用记录接口返回了非 JSON 数据") from exc
+
+    @staticmethod
+    def _session_from_info(
+        username: str,
+        access_token: str,
+        refresh_token: str,
+        expire_at: int,
+        info_payload: dict,
+    ) -> AuthSession:
+        info_data = info_payload.get("data") or {}
+        username_from_info = str(info_data.get("username", "")).strip() or username.strip().lower()
+        nickname = str(info_data.get("nickname", "")).strip()
+        return AuthSession(
+            user=User(username=username_from_info),
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expire_at=expire_at,
+            nickname=nickname,
+            is_admin=is_admin_user(username_from_info, nickname=nickname),
+        )
 
 
 class UserStore:

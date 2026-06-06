@@ -53,6 +53,8 @@ a = Analysis(
         "auth",
         "login_window",
         "styles",
+        "usage",
+        "admin_panel",
     ],
     hookspath=[],
     hooksconfig={},

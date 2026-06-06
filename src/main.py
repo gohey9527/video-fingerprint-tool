@@ -23,10 +23,19 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from auth import AuthApiError, AuthSession, MineAdminAuthClient, User
+from admin_panel import AdminUsageWindow
+from auth import (
+    AuthApiError,
+    AuthSession,
+    MineAdminAuthClient,
+    SavedLoginStore,
+    User,
+    try_restore_session,
+)
 from login_window import LoginWindow
 from processor import find_ffmpeg, format_file_size, is_video_file, process_videos
 from styles import apply_styles
+from usage import UsageReporter
 
 
 class WorkerThread(QThread):
@@ -143,6 +152,7 @@ class MainWindow(QMainWindow):
         self.current_session = session
         self.login_mode = login_mode
         self.api_client = MineAdminAuthClient.from_config()
+        self.usage_reporter = UsageReporter(api_client=self.api_client)
         self.source_path: str | None = None
         self.worker: WorkerThread | None = None
         self.setWindowTitle("短视频指纹批量修改工具")
@@ -169,6 +179,10 @@ class MainWindow(QMainWindow):
         user_row = QHBoxLayout()
         self.user_label = QLabel(f"当前用户：{self.current_user.username}")
         self.user_label.setObjectName("userLabel")
+        if self._is_admin():
+            admin_btn = QPushButton("使用统计")
+            admin_btn.clicked.connect(self._open_admin_panel)
+            user_row.addWidget(admin_btn)
         logout_btn = QPushButton("退出登录")
         logout_btn.clicked.connect(self._logout)
         user_row.addWidget(self.user_label)
@@ -272,6 +286,7 @@ class MainWindow(QMainWindow):
         self.count_spin.setEnabled(False)
         self.progress_bar.setValue(0)
         self.status_label.setText("准备开始…")
+        self._report_usage("generate_video", f"count={count}; source={Path(self.source_path).name}")
 
         self.worker = WorkerThread(self.source_path, count)
         self.worker.progress.connect(self._on_progress)
@@ -316,9 +331,13 @@ class MainWindow(QMainWindow):
             return
         if self.login_mode == "API" and self.current_session and self.api_client:
             try:
+                self._report_usage("logout")
                 self.api_client.logout(self.current_session.access_token)
             except AuthApiError as exc:
                 QMessageBox.warning(self, "退出提示", f"调用 API 退出失败，将继续本地退出：\n{exc}")
+        else:
+            self._report_usage("logout")
+        SavedLoginStore().clear()
         self.close()
         login = LoginWindow()
         if login.exec() != QDialog.DialogCode.Accepted or login.authenticated_user is None:
@@ -328,12 +347,50 @@ class MainWindow(QMainWindow):
         self.current_session = login.authenticated_session
         self.login_mode = login.login_mode
         self.user_label.setText(f"当前用户：{self.current_user.username}")
+        self._report_usage("login")
         self.source_path = None
         self.generate_btn.setEnabled(False)
         self.drop_zone.file_label.setText("尚未选择文件")
         self.status_label.setText(f"登录方式：{self.login_mode}。请先拖入或选择一个视频文件")
-        QMessageBox.information(self, "登录方式", f"本次登录方式：{self.login_mode}")
         self.show()
+
+    def _is_admin(self) -> bool:
+        if self.current_session and self.current_session.is_admin:
+            return True
+        from auth import is_admin_user
+
+        nickname = self.current_session.nickname if self.current_session else ""
+        return is_admin_user(self.current_user.username, nickname=nickname)
+
+    def _report_usage(self, event_type: str, event_detail: str = "") -> None:
+        access_token = self.current_session.access_token if self.current_session else None
+        self.usage_reporter.report(
+            self.current_user.username,
+            event_type,
+            event_detail,
+            access_token=access_token,
+        )
+
+    def _open_admin_panel(self) -> None:
+        access_token = self.current_session.access_token if self.current_session else None
+        dialog = AdminUsageWindow(
+            access_token=access_token,
+            api_client=self.api_client,
+            parent=self,
+        )
+        dialog.exec()
+
+
+def _start_app(app: QApplication) -> tuple[User, AuthSession | None, str] | None:
+    restored = try_restore_session()
+    if restored:
+        user, session, login_mode = restored
+        return user, session, login_mode
+
+    login = LoginWindow()
+    if login.exec() != QDialog.DialogCode.Accepted or login.authenticated_user is None:
+        return None
+    return login.authenticated_user, login.authenticated_session, login.login_mode
 
 
 def main() -> None:
@@ -341,16 +398,17 @@ def main() -> None:
     app.setApplicationName("短视频指纹批量修改工具")
     apply_styles(app)
 
-    login = LoginWindow()
-    if login.exec() != QDialog.DialogCode.Accepted or login.authenticated_user is None:
+    auth_result = _start_app(app)
+    if auth_result is None:
         sys.exit(0)
 
-    QMessageBox.information(None, "登录方式", f"本次登录方式：{login.login_mode}")
+    current_user, current_session, login_mode = auth_result
     window = MainWindow(
-        login.authenticated_user,
-        session=login.authenticated_session,
-        login_mode=login.login_mode,
+        current_user,
+        session=current_session,
+        login_mode=login_mode,
     )
+    window._report_usage("login")
     window.show()
     sys.exit(app.exec())
 

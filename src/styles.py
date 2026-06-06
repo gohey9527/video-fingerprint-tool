@@ -88,5 +88,24 @@ def apply_styles(app: QApplication) -> None:
             border-radius: 7px;
             background: #4f7cff;
         }
+        QCheckBox {
+            color: #c8d0dc;
+            spacing: 8px;
+        }
+        QTableWidget {
+            background: #171b22;
+            alternate-background-color: #1b2028;
+            border: 1px solid #3a4252;
+            border-radius: 10px;
+            gridline-color: #2d3440;
+            color: #eef0f4;
+        }
+        QHeaderView::section {
+            background: #252b36;
+            color: #c8d0dc;
+            padding: 8px;
+            border: none;
+            border-bottom: 1px solid #3a4252;
+        }
         """
     )

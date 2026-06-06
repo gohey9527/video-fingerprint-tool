@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QLabel,
     QLineEdit,
@@ -19,8 +20,11 @@ from auth import (
     AuthApiError,
     AuthSession,
     MineAdminAuthClient,
+    SavedLogin,
+    SavedLoginStore,
     User,
     UserStore,
+    is_admin_user,
 )
 
 
@@ -31,10 +35,13 @@ class LoginWindow(QDialog):
         self.authenticated_session: AuthSession | None = None
         self.login_mode = "本地"
         self.store = UserStore()
+        self.saved_login_store = SavedLoginStore()
+        self.saved_login = self.saved_login_store.load()
         self.api_client = MineAdminAuthClient.from_config()
         self.setWindowTitle("登录 - 短视频指纹工具")
-        self.setFixedSize(420, 360)
+        self.setFixedSize(420, 390)
         self._build_ui()
+        self._apply_saved_login()
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -62,6 +69,11 @@ class LoginWindow(QDialog):
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_input.returnPressed.connect(self._try_login)
 
+        self.remember_checkbox = QCheckBox(
+            "记住账号（下次自动登录）" if self.api_client else "记住账号"
+        )
+        self.remember_checkbox.setObjectName("loginHint")
+
         self.error_label = QLabel("")
         self.error_label.setObjectName("errorLabel")
         self.error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -72,25 +84,50 @@ class LoginWindow(QDialog):
         self.login_btn.setMinimumHeight(42)
         self.login_btn.clicked.connect(self._try_login)
 
-        default_hint = QLabel(
-            f"首次使用默认账户：{DEFAULT_ADMIN_USER} / {DEFAULT_ADMIN_PASSWORD}\n"
-            "登录后请尽快修改密码"
-        )
-        default_hint.setObjectName("loginHint")
-        default_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        default_hint.setWordWrap(True)
-
         layout.addWidget(title)
         layout.addWidget(hint)
         layout.addSpacing(8)
         layout.addWidget(self.username_input)
         layout.addWidget(self.password_input)
+        layout.addWidget(self.remember_checkbox)
         layout.addWidget(self.error_label)
         layout.addWidget(self.login_btn)
         layout.addStretch()
-        layout.addWidget(default_hint)
+
+        if not self.api_client:
+            default_hint = QLabel(
+                f"首次使用默认账户：{DEFAULT_ADMIN_USER} / {DEFAULT_ADMIN_PASSWORD}\n"
+                "登录后请尽快修改密码"
+            )
+            default_hint.setObjectName("loginHint")
+            default_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            default_hint.setWordWrap(True)
+            layout.addWidget(default_hint)
 
         self.username_input.setFocus()
+
+    def _apply_saved_login(self) -> None:
+        if not self.saved_login:
+            return
+        if self.saved_login.username:
+            self.username_input.setText(self.saved_login.username)
+        if self.saved_login.remember_username or self.saved_login.remember_session:
+            self.remember_checkbox.setChecked(True)
+
+    def _persist_login(self, username: str, session: AuthSession | None, login_mode: str) -> None:
+        remember = self.remember_checkbox.isChecked()
+        if not remember:
+            self.saved_login_store.clear()
+            return
+
+        saved = SavedLogin(
+            username=username,
+            remember_username=True,
+            remember_session=login_mode == "API" and session is not None,
+            login_mode=login_mode,
+            refresh_token=session.refresh_token if session else "",
+        )
+        self.saved_login_store.save(saved)
 
     def _try_login(self) -> None:
         username = self.username_input.text().strip()
@@ -107,13 +144,22 @@ class LoginWindow(QDialog):
             self.authenticated_session = session
             self.authenticated_user = session.user
             self.login_mode = "API"
+            self._persist_login(username, session, self.login_mode)
             self.accept()
             return
 
         user = self.store.authenticate(username, password)
         if user:
             self.authenticated_user = user
+            self.authenticated_session = AuthSession(
+                user=user,
+                access_token="",
+                refresh_token="",
+                expire_at=0,
+                is_admin=is_admin_user(user.username),
+            )
             self.login_mode = "本地"
+            self._persist_login(username, None, self.login_mode)
             self.accept()
             return
 
