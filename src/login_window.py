@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QDialog,
     QLabel,
@@ -132,6 +133,13 @@ class LoginWindow(QDialog):
     def _try_login(self) -> None:
         username = self.username_input.text().strip()
         password = self.password_input.text()
+        if not username or not password:
+            self.error_label.setText("请输入账户名和密码")
+            return
+
+        self.login_btn.setEnabled(False)
+        self.error_label.setText("正在登录，请稍候…")
+        QApplication.processEvents()
 
         if self.api_client:
             try:
@@ -140,6 +148,11 @@ class LoginWindow(QDialog):
                 self.error_label.setText(str(exc))
                 self.password_input.clear()
                 self.password_input.setFocus()
+                self.login_btn.setEnabled(True)
+                return
+            except Exception as exc:  # noqa: BLE001 - surface unexpected errors
+                self.error_label.setText(f"登录异常：{exc}")
+                self.login_btn.setEnabled(True)
                 return
             self.authenticated_session = session
             self.authenticated_user = session.user
@@ -166,6 +179,7 @@ class LoginWindow(QDialog):
         self.error_label.setText("账户名或密码错误，请重试")
         self.password_input.clear()
         self.password_input.setFocus()
+        self.login_btn.setEnabled(True)
 
     def closeEvent(self, event) -> None:  # noqa: ANN001
         if self.authenticated_user is None:

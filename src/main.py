@@ -408,8 +408,8 @@ def main() -> None:
         session=current_session,
         login_mode=login_mode,
     )
-    window._report_usage("login")
     window.show()
+    window._report_usage("login")
     sys.exit(app.exec())
 
 

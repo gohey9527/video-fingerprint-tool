@@ -424,14 +424,17 @@ class MineAdminAuthClient:
             "event_detail": event_detail,
             "created_at": created_at,
         }
-        result = self._post_json_with_bearer(
-            "/admin/app/clientUsage/report",
-            access_token,
-            payload,
-        )
+        try:
+            result = self._post_json_with_bearer(
+                "/admin/app/clientUsage/report",
+                access_token,
+                payload,
+            )
+        except AuthApiError:
+            return
         code = int(result.get("code", 500))
         if code not in (200, 404):
-            raise AuthApiError(self._extract_result_error(result, "上报使用记录失败"))
+            return
 
     def list_usage(self, access_token: str, *, page: int = 1, page_size: int = 200) -> dict:
         query = f"page={page}&pageSize={page_size}"

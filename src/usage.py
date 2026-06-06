@@ -6,6 +6,7 @@ import json
 import platform
 import sqlite3
 import sys
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -195,16 +196,17 @@ class UsageReporter:
     ) -> UsageRecord:
         record = self.store.record(username, event_type, event_detail)
         if self.api_client and access_token:
-            self.api_client.report_usage(
-                access_token,
-                username=record.username,
-                event_type=record.event_type,
-                event_detail=record.event_detail,
-                client_id=record.client_id,
-                client_platform=record.client_platform,
-                client_version=record.client_version,
-                created_at=record.created_at,
-            )
+            with suppress(Exception):
+                self.api_client.report_usage(
+                    access_token,
+                    username=record.username,
+                    event_type=record.event_type,
+                    event_detail=record.event_detail,
+                    client_id=record.client_id,
+                    client_platform=record.client_platform,
+                    client_version=record.client_version,
+                    created_at=record.created_at,
+                )
         return record
 
     def list_for_admin(
