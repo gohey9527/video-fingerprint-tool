@@ -21,6 +21,8 @@ APP_VERSION = "1.0.0"
 DEFAULT_ADMIN_USER = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"
 DEFAULT_MINEADMIN_BASE_URL = "https://ad-api.paiwan.com"
+# API 模式下默认可查看「使用统计」的账户（可在 auth_api.json 的 admin_usernames 追加）
+BUILTIN_API_ADMIN_USERNAMES = ("酷推科技",)
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,7 @@ def saved_login_path() -> Path:
 
 def load_admin_usernames() -> set[str]:
     admins = {DEFAULT_ADMIN_USER}
+    admins.update(name.strip().lower() for name in BUILTIN_API_ADMIN_USERNAMES if name.strip())
     config_path = auth_api_config_path()
     if config_path.is_file():
         with suppress(OSError, json.JSONDecodeError):
