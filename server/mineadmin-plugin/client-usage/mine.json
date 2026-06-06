@@ -1,0 +1,20 @@
+{
+  "name": "gohey/client-usage",
+  "description": "短视频指纹工具客户端使用统计（登录/生成视频上报与管理员查询）",
+  "version": "1.0.0",
+  "type": "mixed",
+  "author": [
+    {
+      "name": "gohey9527",
+      "role": "developer"
+    }
+  ],
+  "composer": {
+    "psr-4": {
+      "Plugin\\Gohey\\ClientUsage\\": "src"
+    },
+    "config": "Plugin\\Gohey\\ClientUsage\\ConfigProvider"
+  },
+  "installScript": "Plugin\\Gohey\\ClientUsage\\InstallScript",
+  "uninstallScript": "Plugin\\Gohey\\ClientUsage\\UninstallScript"
+}

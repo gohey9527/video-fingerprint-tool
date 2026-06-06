@@ -3,6 +3,18 @@
 > 面向 MineAdmin 服务端开发，与桌面客户端 `video-fingerprint-tool` 对接。  
 > 客户端已实现上报与查询逻辑，服务端按本文档实现后即可在管理员面板查看**全量用户使用记录**。
 
+**可直接部署的 MineAdmin 插件（含后端 + 后台页面）**：
+
+```
+server/mineadmin-plugin/client-usage/
+```
+
+安装说明见 `server/mineadmin-plugin/client-usage/README.md`，打包命令：
+
+```bash
+bash server/mineadmin-plugin/pack-plugin.sh
+```
+
 ---
 
 ## 1. 目标
