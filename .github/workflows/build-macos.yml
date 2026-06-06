@@ -53,23 +53,16 @@ jobs:
           retention-days: 30
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: macos-latest
-          name: macOS 最新版
-          body: |
-            自动构建的 macOS 版本（内置 FFmpeg + MineAdmin API 登录）。
-
-            使用方法：
-            1. 下载 `短视频指纹工具-macOS-arm64.zip`（Apple 芯片 Mac）
-            2. 解压后将 `短视频指纹工具.app` 拖到「应用程序」
-            3. 若提示无法打开：右键 → 打开
-          files: |
-            release/短视频指纹工具-macOS-*.zip
-            release/使用说明.txt
-          draft: false
-          prerelease: false
-          make_latest: false
-          overwrite_files: true
+        shell: bash
+        run: |
+          if ! gh release view macos-latest >/dev/null 2>&1; then
+            gh release create macos-latest \
+              --title "macOS 最新版" \
+              --notes "自动构建的 macOS 版本（内置 FFmpeg + MineAdmin API 登录）。"
+          fi
+          gh release upload macos-latest \
+            release/短视频指纹工具-macOS-*.zip \
+            release/使用说明.txt \
+            --clobber
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
